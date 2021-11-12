@@ -29,6 +29,8 @@ Version History
 
 This fork
 -----
+Install it with `pip install git+git://github.com/Mikata-Project/pydump@master`
+
 * Make it compatible with Python > 3.6
 * Use zstd compression
 * Add the ability to write/read to/from S3
