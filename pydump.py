@@ -21,10 +21,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 from __future__ import print_function
+from contextlib import ExitStack
 import os
+import s3fs
 import sys
 import pdb
-import gzip
+import traceback
+import zstandard
 import linecache
 try:
     import cPickle as pickle
@@ -70,32 +73,38 @@ def save_dump(filename, tb=None):
         "files": _get_traceback_files(fake_tb),
         "dump_version": DUMP_VERSION,
     }
-    with gzip.open(filename, "wb") as f:
-        if dill is not None:
-            dill.dump(dump, f)
-        else:
-            pickle.dump(dump, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    # open local or S3 file with zstd compression
+    s3 = s3fs.S3FileSystem(anon=False)
+    with s3.open(filename, "wb") if filename.startswith("s3://") else \
+            ExitStack().enter_context(open(filename, "wb")) as f:
+        cctx = zstandard.ZstdCompressor(threads=-1, level=5)
+        with cctx.stream_writer(f, write_size=32 * 1024) as compressor:
+            if dill is not None:
+                dill.dump(dump, compressor)
+            else:
+                pickle.dump(dump, compressor, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def load_dump(filename):
     # ugly hack to handle running non-install pydump
     if "pydump.pydump" not in sys.modules:
         sys.modules["pydump.pydump"] = sys.modules[__name__]
-    with gzip.open(filename, "rb") as f:
-        if dill is not None:
-            try:
-                return dill.load(f)
-            except IOError:
+    s3 = s3fs.S3FileSystem(anon=False)
+
+    with s3.open(filename, "rb") if filename.startswith("s3://") else \
+            ExitStack().enter_context(open(filename, "rb")) as f:
+        dctx = zstandard.ZstdDecompressor()
+        with dctx.stream_reader(f, closefd=False) as compressor:
+            if dill is not None:
                 try:
-                    with open(filename, "rb") as f:
-                        return dill.load(f)
-                except: 
+                    return dill.load(compressor)
+                except Exception:
+                    traceback.print_exc()
                     pass  # dill load failed, try pickle instead
-        try:
-            return pickle.load(f)
-        except IOError:
-            with open(filename, "rb") as f:
-                return pickle.load(f)
+        f.seek(0)
+        with dctx.stream_reader(f) as compressor:
+            return pickle.load(compressor)
 
 
 def debug_dump(dump_filename, post_mortem_func=pdb.post_mortem):

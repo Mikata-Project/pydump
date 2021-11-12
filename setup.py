@@ -32,6 +32,7 @@ setup(
     entry_points={
         'console_scripts': ['pydump = pydump:main', ],
     },
+    install_requires=['s3fs', 'zstandard'],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Console',

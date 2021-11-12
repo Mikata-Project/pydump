@@ -27,6 +27,12 @@ the relevant source is stored in the dump file.
 Version History
 ===============
 
+This fork
+-----
+* Make it compatible with Python > 3.6
+* Use zstd compression
+* Add the ability to write/read to/from S3
+
 1.2.0
 -----
 * Port to Python 3
