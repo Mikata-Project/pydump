@@ -137,16 +137,14 @@ class FakeClass(object):
 class FakeCode(object):
 
     def __init__(self, code):
+        for var in dir((lambda: 1).__code__):
+            if not var.startswith("co_"):
+                continue
+            setattr(self, var, getattr(code, var))
         self.co_filename = os.path.abspath(code.co_filename)
-        self.co_name = code.co_name
-        self.co_argcount = code.co_argcount
         self.co_consts = tuple(
             FakeCode(c) if hasattr(c, "co_filename") else c for c in code.co_consts
         )
-        self.co_firstlineno = code.co_firstlineno
-        self.co_lnotab = code.co_lnotab
-        self.co_varnames = code.co_varnames
-        self.co_flags = code.co_flags
 
 
 class FakeFrame(object):
